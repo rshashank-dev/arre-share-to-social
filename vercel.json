@@ -1,0 +1,22 @@
+{
+  "functions": {
+    "api/share/initiate.js": {
+      "maxDuration": 60
+    },
+    "api/share/options.js": {
+      "maxDuration": 10
+    },
+    "api/share/status/[jobId].js": {
+      "maxDuration": 10
+    },
+    "api/share/connect/[platform].js": {
+      "maxDuration": 10
+    },
+    "api/share/connect/callback/instagram.js": {
+      "maxDuration": 15
+    },
+    "api/share/connect/callback/youtube.js": {
+      "maxDuration": 15
+    }
+  }
+}
