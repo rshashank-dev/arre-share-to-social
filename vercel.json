@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/share/initiate.js": {
-      "maxDuration": 60,
+      "maxDuration": 180,
       "includeFiles": "node_modules/{ffmpeg-static,@ffprobe-installer}/**"
     },
     "api/share/options.js": {
