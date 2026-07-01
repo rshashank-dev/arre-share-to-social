@@ -2,133 +2,94 @@
 
 Standalone Vercel project. After a pod is posted, the app calls this API to
 get share options, lets the user pick a platform/format, then this API
-generates an audiogram and publishes it directly to Instagram or YouTube
-Shorts.
+generates an audiogram and publishes it directly to Instagram or YouTube Shorts.
 
-> **This is a fully separate, new deliverable.** It does not reuse or modify
-> any existing production infrastructure — new Meta App, new Google Cloud
-> project, new Supabase project, new Cloudflare R2 bucket, new Vercel
-> project. See `SETUP_CHECKLIST.md` for the exact steps to create all of
-> these from scratch. Nothing here touches `clickup-automation` or any other
-> existing project.
+> **This is a fully separate, new deliverable.** New Meta App, new Google Cloud
+> project, new Supabase project, new Cloudflare R2 bucket, new Vercel project.
+> See `SETUP_CHECKLIST.md` for exact setup steps. Nothing here touches any
+> existing production infrastructure.
 
-> **No authentication yet.** Every endpoint below is currently open — any
-> caller who knows a `user_id` can call `/api/share/initiate` on their
-> behalf, and OAuth `state` is unsigned. This is intentional for the current
-> testing phase. Before this goes to real users, add an API key / session
-> check on all routes and sign the OAuth `state` parameter (HMAC). Flagging
-> this explicitly so it isn't missed during handoff.
+> **No authentication yet.** Every endpoint is currently open. Before going
+> live to real users, add an API key check on all routes and sign the OAuth
+> `state` parameter (HMAC). This is intentional for the current testing phase.
+
+> **YouTube quota not yet increased.** Default is 10,000 units/day (~6 uploads).
+> Must be increased to 50,000 units/day before production launch.
+> See: Google Cloud Console → APIs & Services → YouTube Data API v3 → Quotas.
+
+---
+
+## Proven status (tested end to end, real posts)
+
+| Platform | Format | Tested | Live URL |
+|---|---|---|---|
+| Instagram | Reel | ✅ | instagram.com/reel/DaOI21vFM2d/ |
+| Instagram | Post (Feed) | ✅ | instagram.com/reel/DaQI0p4iZ0-/ |
+| Instagram | Story | ✅ | instagram.com/stories/shashankmbb1911/... |
+| YouTube | Shorts | ✅ | youtube.com/shorts/SzfQ81aaxa0 |
+
+---
 
 ## Endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/share/options?user_id={id}` | Returns which platforms/formats to show, and connection status |
+| GET | `/api/share/options?user_id={id}` | Returns platforms/formats to show + connection status |
 | GET | `/api/share/connect/instagram?user_id={id}` | Returns OAuth URL to connect Instagram |
 | GET | `/api/share/connect/youtube?user_id={id}` | Returns OAuth URL to connect YouTube |
 | GET | `/api/share/connect/callback/instagram` | OAuth redirect target (registered in Meta App) |
 | GET | `/api/share/connect/callback/youtube` | OAuth redirect target (registered in Google Cloud) |
-| POST | `/api/share/initiate` | Runs the full pipeline: generate audiogram → upload to R2 → publish |
-| GET | `/api/share/status/:jobId` | Look up a past job's result (history / retry / debugging) |
+| POST | `/api/share/initiate` | Full pipeline: generate audiogram → upload to R2 → publish |
+| GET | `/api/share/status/:jobId` | Look up a past job result |
 
-## 1. Setup
+---
 
-**Full click-by-click steps are in `SETUP_CHECKLIST.md`.** Summary below.
+## App integration — trigger points
 
-### Supabase (new project — not your production one)
-Create a new Supabase project. Run `supabase/migration.sql` in its SQL editor. Creates `social_tokens` and `share_jobs`.
+The app fires exactly two API calls for this feature:
 
-### Meta (Instagram) — new app
-1. developers.facebook.com → Create App → type: Business
-2. Add product: **Instagram Graph API**
-3. Add permission: `instagram_content_publish`
-4. Add a redirect URI: `https://<your-vercel-url>/api/share/connect/callback/instagram`
-5. For testing (no App Review needed yet): add your own Instagram **Business or Creator** account as a Test User in the app dashboard
-6. Copy App ID + App Secret into env vars
+| User action | API call | What to do with response |
+|---|---|---|
+| Taps "Add to socials" | `GET /api/share/options?user_id={id}` | For each platform: if `connected: true` show `formats` as chips; if `connected: false` show "Connect" button using `connect_url` |
+| Taps "Connect Instagram/YouTube" | `GET` the `connect_url` from options response | Open returned `auth_url` in a WebView. On `arrevoice://share/connect/success` deep link, close WebView and re-fetch options |
+| Taps a format chip | `POST /api/share/initiate` with `{ pod_id, audio_url, image_url, title, caption, platform, format, user_id }` | Show loading state (up to ~90s). On `status: success` show "Posted" with `post_url`. On `status: failed` show `error_message` with retry |
 
-### Google (YouTube) — new project
-1. console.cloud.google.com → New Project
-2. Enable **YouTube Data API v3**
-3. Create OAuth 2.0 credentials → type: Web application
-4. Add redirect URI: `https://<your-vercel-url>/api/share/connect/callback/youtube`
-5. Copy Client ID + Secret into env vars
-6. Note the default quota: 10,000 units/day = ~6 uploads/day. Request an increase before scaling.
+**Important:** `audio_url` and `image_url` must be the full-resolution, publicly
+accessible CDN URLs — not Next.js image proxy URLs (`/_next/image?...`).
+The app already has these in its own state from rendering the pod.
 
-### Cloudflare R2 — new bucket
-Create a brand new bucket (e.g. `arre-audiograms-dev`), not your existing production bucket. Enable public access, generate a scoped API token with read/write to just this bucket.
+---
 
-### Env vars
-Copy `.env.example` → set all values in Vercel project settings.
+## Setup
 
-## 2. Deploy
+Full click-by-click steps in `SETUP_CHECKLIST.md`. Summary:
+
+1. **Supabase** — new project, run `supabase/migration.sql`
+2. **Meta** — new app, Instagram API with Instagram Login, add `instagram_business_basic` + `instagram_business_content_publish` permissions, set redirect URI, add Instagram Tester account
+3. **Google Cloud** — new project, enable YouTube Data API v3, OAuth consent screen with `youtube.upload` + `youtube.readonly` scopes, create Web OAuth client, set redirect URI
+4. **Cloudflare R2** — new bucket with public access enabled, scoped API token
+5. **Vercel** — set all env vars from `.env.example`, deploy
+
+## Deploy
 
 ```bash
 npm install
 vercel --prod
 ```
 
-This is a plain Vercel Functions project (no framework) — the `api/` folder
-maps directly to routes, no build step needed.
+## Environment variables
 
-## 3. Test it manually
+See `.env.example` for the full list. All values come from new resources
+created specifically for this project — do not reuse production credentials.
 
-### Check options for a user
-```bash
-curl "https://<your-app>.vercel.app/api/share/options?user_id=test-user-1"
-```
+## Known limitations (by design, current version)
 
-### Connect Instagram (open this URL in a browser)
-```bash
-curl "https://<your-app>.vercel.app/api/share/connect/instagram?user_id=test-user-1"
-# returns { auth_url: "..." } — open auth_url in a browser, log in, approve
-```
-
-### Initiate a share (after connecting)
-```bash
-curl -X POST "https://<your-app>.vercel.app/api/share/initiate" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pod_id": "pod_123",
-    "audio_url": "https://example.com/pod.mp3",
-    "image_url": "https://example.com/cover.jpg",
-    "title": "My Pod Title",
-    "caption": "Check out my new pod on Arre Voice!",
-    "platform": "instagram",
-    "format": "reel",
-    "user_id": "test-user-1"
-  }'
-```
-
-This call will take up to ~30-60s since audiogram generation + publish
-happens inline. The response includes the live `post_url` on success.
-
-## 4. App integration
-
-The app's job is small. This section maps each UI interaction to the exact
-API call it should fire — no other backend logic needed on the app side.
-
-| User action | API call | What happens with the response |
-|---|---|---|
-| Pod finishes posting, share sheet opens | none yet | App shows the existing "Share to" / "As a clip" rows plus the new "Add to socials" row |
-| Taps "Add to socials" | `GET /api/share/options?user_id={id}` | Render the second sheet: for each platform, if `connected: true` show its `formats` as tappable chips (Reel/Post/Story for Instagram, Shorts for YouTube); if `connected: false` show a "Connect" button using `connect_url` |
-| Taps "Connect Instagram" / "Connect YouTube" | `GET` the `connect_url` from the platform's entry in the last `/options` response — already includes `user_id` | This returns `{ auth_url }`. Open `auth_url` in a WebView. On the `arrevoice://share/connect/success` deep link, close the WebView and re-fetch `/api/share/options` to refresh the sheet |
-| Taps a format chip (Reel / Post / Story / Shorts) | `POST /api/share/initiate` with `{ pod_id, audio_url, image_url, title, caption, platform, format, user_id }` | Show a loading state for up to ~60s. On response: `status: "success"` → show "Posted" with `post_url`; `status: "failed"` → show `error_message` with a retry button that re-fires the same call |
-
-Two calls drive the entire flow: `options` on opening the social sheet,
-`initiate` on picking a format. Nothing else is needed from the app beyond
-the OAuth WebView handoff for connecting a new platform.
-
-## Known limitations (by design, for this MVP)
-
-- **Synchronous pipeline.** `/api/share/initiate` does everything in one
-  request (capped at 60s via `vercel.json`). Fine for pods under ~60s. If you
-  need longer clips or want true async with push notifications, split this
-  into a queue (Upstash QStash or Inngest) and use `/api/share/status` for
-  polling.
-- **Spotify is not included.** There is no public API for publishing audio
-  content to Spotify — see the implementation doc for details.
-- **Instagram requires a Business or Creator account.** Personal accounts
-  cannot use the Content Publishing API. Surface this clearly in the connect
-  flow.
-- **YouTube quota.** Default 10,000 units/day (~6 uploads). Request an
-  increase from Google before launch.
+- **Synchronous pipeline.** `/api/share/initiate` runs everything in one
+  request (capped at 180s). For pods significantly longer than 60s or under
+  heavy concurrency, consider splitting into an async queue (Upstash QStash
+  or Inngest) and using `/api/share/status` for polling.
+- **No authentication.** Add an API key or JWT check before production.
+- **YouTube quota.** Default 10,000 units/day. Request increase before launch.
+- **Spotify not included.** No public API for publishing audio to Spotify.
+- **Meta App Review required before public launch.** Currently only works for
+  Instagram Tester accounts. Submit for App Review once feature is QA-approved.
