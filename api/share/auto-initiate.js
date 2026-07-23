@@ -166,10 +166,14 @@ module.exports = async (req, res) => {
     platforms,
   });
 
-  // ── Fan out: 3 posts × platforms in parallel ────────────────────────────────
+  // ── Run jobs sequentially to avoid FFmpeg memory exhaustion ────────────────
+  // 6 parallel FFmpeg processes crash the serverless function.
+  // Sequential takes ~6 × 90s = ~9 min worst case but stays within maxDuration.
   const jobCombinations = posts.flatMap(post =>
     platforms.map(platform => ({ category, post, platform }))
   );
 
-  await Promise.allSettled(jobCombinations.map(runJob));
+  for (const combo of jobCombinations) {
+    await runJob(combo);
+  }
 };
