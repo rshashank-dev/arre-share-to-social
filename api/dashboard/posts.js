@@ -7,7 +7,8 @@
  *   platform  instagram | youtube
  *   status    success | failed | processing
  *   format    reel | post | story | shorts
- *   user_id   filter by specific creator
+ *   category  e.g. Poetry, News, Music
+ *   language  Tamil | Hinglish | English
  *   page      default 1
  *   limit     default 50, max 200
  */
@@ -23,7 +24,7 @@ module.exports = async (req, res) => {
   const {
     start, end,
     platform, status, format,
-    user_id,
+    category, language,
     page  = '1',
     limit = '50',
   } = req.query;
@@ -34,16 +35,20 @@ module.exports = async (req, res) => {
 
   let query = supabase
     .from('share_jobs')
-    .select('id, arre_user_id, pod_id, platform, format, status, step, post_url, error_message, error_code, audiogram_url, created_at, updated_at', { count: 'exact' })
+    .select(
+      'id, arre_user_id, category, language, pod_id, platform, format, status, step, post_url, error_message, error_code, created_at, updated_at',
+      { count: 'exact' }
+    )
     .order('created_at', { ascending: false })
     .range(offset, offset + limitNum - 1);
 
-  if (start) query = query.gte('created_at', `${start}T00:00:00.000Z`);
-  if (end)   query = query.lte('created_at', `${end}T23:59:59.999Z`);
+  if (start)    query = query.gte('created_at', `${start}T00:00:00.000Z`);
+  if (end)      query = query.lte('created_at', `${end}T23:59:59.999Z`);
   if (platform) query = query.eq('platform', platform);
   if (status)   query = query.eq('status', status);
   if (format)   query = query.eq('format', format);
-  if (user_id)  query = query.eq('arre_user_id', user_id);
+  if (category) query = query.eq('category', category);
+  if (language) query = query.eq('language', language);
 
   const { data, error, count } = await query;
   if (error) return res.status(500).json({ error: error.message });

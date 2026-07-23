@@ -1,13 +1,9 @@
 /**
  * GET /api/dashboard/accounts
  *
- * Returns all AI creator accounts with:
- *  - IG and YT connection status (from social_tokens)
- *  - Total posts and last post date (from share_jobs)
- *  - Display metadata (from ai_accounts table if it exists and is populated)
- *
- * Falls back gracefully if ai_accounts table is empty —
- * derives the account list from social_tokens instead.
+ * Returns the 17 category accounts with IG + YT connection status
+ * and posting stats. social_tokens uses category name as arre_user_id
+ * for AI accounts. Falls back gracefully if ai_accounts is empty.
  */
 
 const { supabase } = require('../../lib/supabase');
@@ -18,46 +14,45 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-  // ── Pull all three sources in parallel ──────────────────────────────────────
   const [tokensRes, jobsRes, accountsRes] = await Promise.all([
     supabase.from('social_tokens').select('arre_user_id, platform, username, expires_at, updated_at'),
-    supabase.from('share_jobs').select('arre_user_id, status, platform, created_at').order('created_at', { ascending: false }),
+    supabase.from('share_jobs').select('arre_user_id, category, language, status, platform, created_at').order('created_at', { ascending: false }),
     supabase.from('ai_accounts').select('*'),
   ]);
 
-  const tokens   = tokensRes.data   || [];
-  const jobs     = jobsRes.data     || [];
-  const aiAccts  = accountsRes.data || [];
+  const tokens  = tokensRes.data  || [];
+  const jobs    = jobsRes.data    || [];
+  const aiAccts = accountsRes.data || [];
 
-  // ── Build account registry keyed by creator_id ──────────────────────────────
+  // ── Build registry keyed by category ────────────────────────────────────────
   const registry = {};
 
-  // Seed from ai_accounts table if populated
+  // Seed from ai_accounts (source of truth for display names)
   aiAccts.forEach(a => {
-    registry[a.creator_id] = {
-      creator_id:      a.creator_id,
-      display_name:    a.display_name || a.creator_id,
-      category:        a.category     || null,
-      language:        a.language     || null,
-      ig_connected:    a.ig_connected || false,
+    registry[a.category] = {
+      category:        a.category,
+      display_name:    a.display_name || a.category,
+      ig_connected:    false,
       ig_username:     a.ig_username  || null,
-      yt_connected:    a.yt_connected || false,
+      yt_connected:    false,
       yt_channel_name: a.yt_channel_name || null,
       total_posts:     0,
       ig_posts:        0,
       yt_posts:        0,
+      tamil_posts:     0,
+      hinglish_posts:  0,
+      english_posts:   0,
       last_post_at:    null,
     };
   });
 
-  // Supplement / seed from social_tokens (source of truth for connection status)
+  // Supplement from social_tokens — for AI accounts, arre_user_id = category name
   tokens.forEach(t => {
-    if (!registry[t.arre_user_id]) {
-      registry[t.arre_user_id] = {
-        creator_id:      t.arre_user_id,
-        display_name:    t.arre_user_id,
-        category:        null,
-        language:        null,
+    const cat = t.arre_user_id;
+    if (!registry[cat]) {
+      registry[cat] = {
+        category:        cat,
+        display_name:    cat,
         ig_connected:    false,
         ig_username:     null,
         yt_connected:    false,
@@ -65,28 +60,33 @@ module.exports = async (req, res) => {
         total_posts:     0,
         ig_posts:        0,
         yt_posts:        0,
+        tamil_posts:     0,
+        hinglish_posts:  0,
+        english_posts:   0,
         last_post_at:    null,
       };
     }
     if (t.platform === 'instagram') {
-      registry[t.arre_user_id].ig_connected = true;
-      registry[t.arre_user_id].ig_username  = t.username;
+      registry[cat].ig_connected = true;
+      registry[cat].ig_username  = t.username;
     }
     if (t.platform === 'youtube') {
-      registry[t.arre_user_id].yt_connected    = true;
-      registry[t.arre_user_id].yt_channel_name = t.username;
+      registry[cat].yt_connected    = true;
+      registry[cat].yt_channel_name = t.username;
     }
   });
 
-  // Add job counts
+  // Add job counts — use category column when available, fall back to arre_user_id
   jobs.forEach(j => {
-    if (!registry[j.arre_user_id]) return;
-    registry[j.arre_user_id].total_posts++;
-    if (j.platform === 'instagram') registry[j.arre_user_id].ig_posts++;
-    if (j.platform === 'youtube')   registry[j.arre_user_id].yt_posts++;
-    if (!registry[j.arre_user_id].last_post_at) {
-      registry[j.arre_user_id].last_post_at = j.created_at;
-    }
+    const cat = j.category || j.arre_user_id;
+    if (!registry[cat]) return;
+    registry[cat].total_posts++;
+    if (j.platform === 'instagram') registry[cat].ig_posts++;
+    if (j.platform === 'youtube')   registry[cat].yt_posts++;
+    if (j.language === 'Tamil')    registry[cat].tamil_posts++;
+    if (j.language === 'Hinglish') registry[cat].hinglish_posts++;
+    if (j.language === 'English')  registry[cat].english_posts++;
+    if (!registry[cat].last_post_at) registry[cat].last_post_at = j.created_at;
   });
 
   const accounts = Object.values(registry).sort((a, b) =>
@@ -94,11 +94,11 @@ module.exports = async (req, res) => {
   );
 
   const summary = {
-    total:          accounts.length,
-    fully_connected: accounts.filter(a => a.ig_connected && a.yt_connected).length,
-    ig_only:         accounts.filter(a => a.ig_connected && !a.yt_connected).length,
-    yt_only:         accounts.filter(a => !a.ig_connected && a.yt_connected).length,
-    not_connected:   accounts.filter(a => !a.ig_connected && !a.yt_connected).length,
+    total:            accounts.length,
+    fully_connected:  accounts.filter(a => a.ig_connected && a.yt_connected).length,
+    ig_only:          accounts.filter(a => a.ig_connected && !a.yt_connected).length,
+    yt_only:          accounts.filter(a => !a.ig_connected && a.yt_connected).length,
+    not_connected:    accounts.filter(a => !a.ig_connected && !a.yt_connected).length,
   };
 
   return res.status(200).json({ accounts, summary });
