@@ -1,17 +1,20 @@
 /**
  * POST /api/share/auto-initiate
- *
- * 1. Validates request + API key
- * 2. Looks up category tokens
- * 3. Creates all job records in DB immediately
- * 4. Returns { status: accepted } immediately
- * 5. Fires one independent /api/share/process-job call per job (parallel)
- *    Each runs in its own Vercel function invocation — no memory conflicts,
- *    no sequential bottleneck. Total time = 1 job (~90s) not 6 (~9min).
+ * Creates all job records, then processes them sequentially IN THIS SAME FUNCTION
+ * before returning. This guarantees execution — no fire-and-forget race condition.
+ * 
+ * Returns response AFTER all jobs complete (or fail).
+ * Backend should not await — fire and forget on their side.
+ * maxDuration: 300s covers 6 jobs × ~45s each.
  */
 
-const { supabase }  = require('../../lib/supabase');
-const { getToken }  = require('../../lib/tokens');
+const { generateAudiogram } = require('../../lib/audiogram');
+const { uploadToR2 }         = require('../../lib/r2');
+const { supabase }           = require('../../lib/supabase');
+const instagram              = require('../../lib/instagram');
+const youtube                = require('../../lib/youtube');
+const { getToken }           = require('../../lib/tokens');
+const fs                     = require('fs');
 
 const REQUIRED_POST_FIELDS = ['creator_id', 'language', 'pod_id', 'audio_url', 'image_url', 'title'];
 const VALID_LANGUAGES      = ['Tamil', 'Hinglish', 'English'];
@@ -27,6 +30,68 @@ function validateRequest(body) {
       return `posts[${i}].language must be Tamil | Hinglish | English`;
   }
   return null;
+}
+
+async function updateJob(jobId, fields) {
+  const { error } = await supabase
+    .from('share_jobs')
+    .update({ ...fields, updated_at: new Date().toISOString() })
+    .eq('id', jobId);
+  if (error) console.error(`updateJob failed [${jobId}]:`, error.message);
+}
+
+async function processJob({ job, post, platform, category }) {
+  let audiogramPath = null;
+  try {
+    await updateJob(job.id, { step: 'generating_audiogram' });
+
+    const result = await generateAudiogram({
+      audioUrl:      post.audio_url,
+      imageUrl:      post.image_url,
+      format:        'vertical',
+      durationLimit: 15,
+    });
+    audiogramPath = result.localPath;
+
+    await updateJob(job.id, { step: 'uploading_to_cdn' });
+    const audiogramUrl = await uploadToR2(audiogramPath, `audiograms/${job.id}.mp4`);
+    await updateJob(job.id, { audiogram_url: audiogramUrl });
+
+    await updateJob(job.id, { step: 'publishing_to_platform' });
+
+    let postResult;
+    if (platform === 'instagram') {
+      postResult = await instagram.publish({
+        arreUserId: category,
+        videoUrl:   audiogramUrl,
+        caption:    '',
+        format:     'reel',
+      });
+    } else {
+      postResult = await youtube.publish({
+        arreUserId:  category,
+        localPath:   audiogramPath,
+        title:       post.title,
+        description: '',
+      });
+    }
+
+    if (audiogramPath && fs.existsSync(audiogramPath)) fs.unlinkSync(audiogramPath);
+    await updateJob(job.id, { status: 'success', step: null, post_url: postResult.postUrl });
+    console.log(`SUCCESS [${category}/${platform}/${post.language}]: ${postResult.postUrl}`);
+
+  } catch (err) {
+    if (audiogramPath && fs.existsSync(audiogramPath)) {
+      try { fs.unlinkSync(audiogramPath); } catch (_) {}
+    }
+    await updateJob(job.id, {
+      status:        'failed',
+      step:          null,
+      error_code:    err.code || 'UNKNOWN_ERROR',
+      error_message: err.message || 'Unknown error',
+    });
+    console.error(`FAILED [${category}/${platform}/${post.language}]:`, err.message);
+  }
 }
 
 module.exports = async (req, res) => {
@@ -56,8 +121,8 @@ module.exports = async (req, res) => {
     ...(ytToken ? ['youtube']   : []),
   ];
 
-  // ── Create ALL job records immediately ────────────────────────────────────
-  const jobs = [];
+  // ── Step 1: Create ALL job records immediately ────────────────────────────
+  const jobQueue = [];
   for (const post of posts) {
     for (const platform of platforms) {
       const { data, error } = await supabase
@@ -78,29 +143,28 @@ module.exports = async (req, res) => {
         .single();
 
       if (error) {
-        console.error(`Failed to create job [${platform}/${post.language}]:`, error.message);
+        console.error(`createJob failed [${platform}/${post.language}]:`, error.message);
         continue;
       }
-      jobs.push({ jobId: data.id, post, platform, category });
+      jobQueue.push({ job: data, post, platform, category });
     }
   }
 
-  // ── Return immediately ────────────────────────────────────────────────────
-  res.status(200).json({ status: 'accepted', category, jobs: jobs.length, platforms });
+  // ── Step 2: Process sequentially — guaranteed to run ─────────────────────
+  // We do NOT return early. Vercel keeps function alive until handler resolves.
+  // maxDuration: 300s in vercel.json — enough for 6 × 15s jobs + overhead.
+  const results = [];
+  for (const item of jobQueue) {
+    await processJob(item);
+    results.push({ jobId: item.job.id, platform: item.platform, language: item.post.language });
+  }
 
-  // ── Fire one process-job call per job — all in parallel ──────────────────
-  // Each runs in its own Vercel function invocation with its own memory/timeout.
-  const baseUrl = `https://${req.headers.host}`;
-  await Promise.allSettled(
-    jobs.map(({ jobId, post, platform, category }) =>
-      fetch(`${baseUrl}/api/share/process-job`, {
-        method:  'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key':    process.env.API_SECRET_KEY,
-        },
-        body: JSON.stringify({ jobId, category, post, platform }),
-      }).catch(err => console.error(`Failed to dispatch job ${jobId}:`, err.message))
-    )
-  );
+  // ── Step 3: Return after all jobs complete ────────────────────────────────
+  return res.status(200).json({
+    status:   'completed',
+    category,
+    jobs:     results.length,
+    platforms,
+    results,
+  });
 };
