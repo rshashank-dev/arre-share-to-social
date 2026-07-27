@@ -41,7 +41,7 @@ async function createJobRecord({ category, post, platform }) {
   const { data, error } = await supabase
     .from('share_jobs')
     .insert({
-      creator_id: category,
+      creator_id: post.creator_id,
       pod_id:       post.pod_id,
       platform,
       format:       platform === 'instagram' ? 'reel' : 'shorts',
