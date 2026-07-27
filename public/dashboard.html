@@ -422,7 +422,7 @@ async function renderPosts(page=1){
     const rows=d.posts.map(p=>`
       <tr>
         <td style="white-space:nowrap;font-size:12px">${fmtDT(p.created_at)}</td>
-        <td class="mono" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.arre_user_id}">${p.arre_user_id}</td>
+        <td class="mono" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.creator_id}">${p.creator_id}</td>
         <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px" title="${p.pod_id||''}">${p.pod_id||'—'}</td>
         <td>${platformBadge(p.platform)}</td>
         <td>${formatBadge(p.format)}</td>
@@ -532,7 +532,7 @@ async function renderEngagement(){
             <tbody>
               ${d.by_post.map(p=>`<tr>
                 <td style="font-size:12px;white-space:nowrap">${fmtDate(p.created_at)}</td>
-                <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.arre_user_id}</td>
+                <td style="font-size:12px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.creator_id}</td>
                 <td>${platformBadge(p.platform)}</td>
                 <td>${formatBadge(p.format)}</td>
                 ${[...ig,...yt].map(m=>`<td class="mono" style="font-size:14px">${nfmt(p.metrics[m.metric]||0)}</td>`).join('')}
