@@ -5,10 +5,7 @@
       "includeFiles": "node_modules/{ffmpeg-static,@ffprobe-installer}/**"
     },
     "api/share/auto-initiate.js": {
-      "maxDuration": 30
-    },
-    "api/share/process-job.js": {
-      "maxDuration": 180,
+      "maxDuration": 300,
       "includeFiles": "node_modules/{ffmpeg-static,@ffprobe-installer}/**"
     },
     "api/share/options.js":                    { "maxDuration": 10 },
