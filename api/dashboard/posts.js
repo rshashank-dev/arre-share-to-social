@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
   let query = supabase
     .from('share_jobs')
     .select(
-      'id, arre_user_id, category, language, pod_id, platform, format, status, step, post_url, error_message, error_code, created_at, updated_at',
+      'id, creator_id, category, language, pod_id, platform, format, status, step, post_url, error_message, error_code, created_at, updated_at',
       { count: 'exact' }
     )
     .order('created_at', { ascending: false })

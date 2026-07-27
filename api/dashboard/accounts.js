@@ -2,7 +2,7 @@
  * GET /api/dashboard/accounts
  *
  * Returns the 17 category accounts with IG + YT connection status
- * and posting stats. social_tokens uses category name as arre_user_id
+ * and posting stats. social_tokens uses category name as creator_id
  * for AI accounts. Falls back gracefully if ai_accounts is empty.
  */
 
@@ -15,8 +15,8 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const [tokensRes, jobsRes, accountsRes] = await Promise.all([
-    supabase.from('social_tokens').select('arre_user_id, platform, username, expires_at, updated_at'),
-    supabase.from('share_jobs').select('arre_user_id, category, language, status, platform, created_at').order('created_at', { ascending: false }),
+    supabase.from('social_tokens').select('creator_id, platform, username, expires_at, updated_at'),
+    supabase.from('share_jobs').select('creator_id, category, language, status, platform, created_at').order('created_at', { ascending: false }),
     supabase.from('ai_accounts').select('*'),
   ]);
 
@@ -46,9 +46,9 @@ module.exports = async (req, res) => {
     };
   });
 
-  // Supplement from social_tokens — for AI accounts, arre_user_id = category name
+  // Supplement from social_tokens — for AI accounts, creator_id = category name
   tokens.forEach(t => {
-    const cat = t.arre_user_id;
+    const cat = t.creator_id;
     if (!registry[cat]) {
       registry[cat] = {
         category:        cat,
@@ -76,9 +76,9 @@ module.exports = async (req, res) => {
     }
   });
 
-  // Add job counts — use category column when available, fall back to arre_user_id
+  // Add job counts — use category column when available, fall back to creator_id
   jobs.forEach(j => {
-    const cat = j.category || j.arre_user_id;
+    const cat = j.category || j.creator_id;
     if (!registry[cat]) return;
     registry[cat].total_posts++;
     if (j.platform === 'instagram') registry[cat].ig_posts++;
