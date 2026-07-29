@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const [tokensRes, jobsRes, accountsRes] = await Promise.all([
-    supabase.from('social_tokens').select('creator_id, platform, username, expires_at, updated_at'),
+    supabase.from('social_tokens').select('creator_id, platform, username, handle, expires_at, updated_at'),
     supabase.from('share_jobs').select('creator_id, category, language, status, platform, created_at').order('created_at', { ascending: false }),
     supabase.from('ai_accounts').select('*'),
   ]);
@@ -36,6 +36,7 @@ module.exports = async (req, res) => {
       ig_username:     a.ig_username  || null,
       yt_connected:    false,
       yt_channel_name: a.yt_channel_name || null,
+        yt_handle:       null,
       total_posts:     0,
       ig_posts:        0,
       yt_posts:        0,
@@ -73,6 +74,7 @@ module.exports = async (req, res) => {
     if (t.platform === 'youtube') {
       registry[cat].yt_connected    = true;
       registry[cat].yt_channel_name = t.username;
+      registry[cat].yt_handle = t.handle || null;
     }
   });
 

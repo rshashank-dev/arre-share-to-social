@@ -204,6 +204,9 @@ section{margin-bottom:34px}
         <div class="rule"></div>
       </div>
       <div class="filter-bar">
+        <select class="filter-select" id="f-category">
+          <option value="">All categories</option>
+        </select>
         <select class="filter-select" id="f-platform">
           <option value="">All platforms</option>
           <option value="instagram">Instagram</option>
@@ -222,7 +225,7 @@ section{margin-bottom:34px}
           <option value="failed">Failed</option>
           <option value="processing">Processing</option>
         </select>
-        <button class="filter-tag" id="f-reset">✕ Clear filters</button>
+        <button class="filter-tag" id="f-reset" style="display:none">✕ Clear filters</button>
       </div>
       <div id="posts-content">
         <div class="state"><div class="spinner"></div>Loading…</div>
@@ -253,20 +256,24 @@ function pad(n){return n<10?'0'+n:''+n}
 function nfmt(n){return(parseInt(n)||0).toLocaleString('en-US')}
 function fmtDT(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true})}
 function fmtDate(iso){if(!iso)return'—';const d=new Date(iso);return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
+function toTitle(s){if(!s)return'—';return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase();}
 
-function istYesterday(){const ist=new Date(Date.now()+5.5*3600*1000);ist.setUTCDate(ist.getUTCDate()-1);return ist}
+function istToday(){return new Date(Date.now()+5.5*3600*1000)}
+function istYesterday(){const ist=istToday();ist.setUTCDate(ist.getUTCDate()-1);return ist}
 function toISO(d){return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())}
 
 let _start='',_end='',_picker=null;
 let _postsPage=1;
 
 function setPreset(p){
-  const y=istYesterday();let s,e=new Date(y);
-  if(p==='today'){s=new Date(y);e=new Date(y)}
-  else if(p==='yesterday'){s=new Date(y)}
-  else if(p==='7'){s=new Date(y);s.setUTCDate(y.getUTCDate()-6)}
-  else if(p==='30'){s=new Date(y);s.setUTCDate(y.getUTCDate()-29)}
-  else if(p==='month'){s=new Date(Date.UTC(y.getUTCFullYear(),y.getUTCMonth(),1))}
+  const today=istToday();
+  const y=istYesterday();
+  let s,e;
+  if(p==='today'){s=new Date(today);e=new Date(today)}
+  else if(p==='yesterday'){s=new Date(y);e=new Date(y)}
+  else if(p==='7'){e=new Date(y);s=new Date(y);s.setUTCDate(y.getUTCDate()-6)}
+  else if(p==='30'){e=new Date(y);s=new Date(y);s.setUTCDate(y.getUTCDate()-29)}
+  else if(p==='month'){e=new Date(y);s=new Date(Date.UTC(y.getUTCFullYear(),y.getUTCMonth(),1))}
   _start=toISO(s);_end=toISO(e);
   if(_picker)_picker.setDateRange(new Date(_start+'T12:00:00'),new Date(_end+'T12:00:00'));
 }
@@ -302,13 +309,13 @@ function barRow(label,val,total,cls=''){
 // ── Status / format badges ───────────────────────────────────────────────────
 function statusBadge(s){
   const cls={success:'st-success',failed:'st-failed',processing:'st-processing'}[s]||'st-processing';
-  return`<span class="${cls}">${s}</span>`;
+  return`<span class="${cls}">${toTitle(s)}</span>`;
 }
 function platformBadge(p){
   return`<span style="font-size:13px;font-weight:500;color:var(--text)">${p==='instagram'?'Instagram':'YouTube'}</span>`;
 }
 function formatBadge(f){
-  return`<span class="fmt-text">${f}</span>`;
+  return`<span class="fmt-text">${toTitle(f)}</span>`;
 }
 function connDot(connected){
   return`<span class="dot ${connected?'dot-green':'dot-red'}"></span>`;
@@ -329,10 +336,14 @@ async function fetchPosts(page=1){
   const fp=document.getElementById('f-platform').value;
   const ff=document.getElementById('f-format').value;
   const fs=document.getElementById('f-status').value;
+  const fc=document.getElementById('f-category').value;
   const params=new URLSearchParams({start:_start,end:_end,page,limit:50});
   if(fp)params.set('platform',fp);
   if(ff)params.set('format',ff);
   if(fs)params.set('status',fs);
+  if(fc)params.set('category',fc);
+  // show/hide clear button
+  document.getElementById('f-reset').style.display=(fp||ff||fs||fc)?'inline-flex':'none';
   const r=await fetch(`/api/dashboard/posts?${params}`);
   if(!r.ok)throw new Error(await r.text());
   return r.json();
@@ -414,15 +425,28 @@ async function renderPosts(page=1){
       return;
     }
 
-    // Sort by category for grouping
-    const sorted=[...d.posts].sort((a,b)=>(a.category||'').localeCompare(b.category||''));
+    // Sort by category then by time within each category
+    const sorted=[...d.posts].sort((a,b)=>{
+      const ca=(a.category||'').localeCompare(b.category||'');
+      if(ca!==0)return ca;
+      return new Date(a.created_at)-new Date(b.created_at);
+    });
+
+    // Populate category dropdown from unique categories in results
+    const cats=[...new Set(sorted.map(p=>p.category).filter(Boolean))].sort();
+    const catSel=document.getElementById('f-category');
+    const curCat=catSel.value;
+    catSel.innerHTML=`<option value="">All categories</option>`+cats.map(c=>`<option value="${c}"${c===curCat?' selected':''}>${c}</option>`).join('');
+
     let lastCat='';
     const rows=sorted.map(p=>{
-      const catCell = p.category!==lastCat
-        ? `<td style="font-size:12.5px;font-weight:600;color:var(--navy);white-space:nowrap">${p.category||'—'}</td>`
-        : `<td style="font-size:12.5px;color:var(--muted)"></td>`;
+      const isNewCat = p.category!==lastCat;
+      const catCell = isNewCat
+        ? `<td style="font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap;vertical-align:top;padding-top:14px">${p.category||'—'}</td>`
+        : `<td></td>`;
       lastCat=p.category||'';
-      return`<tr>
+      const rowStyle = isNewCat && lastCat ? 'border-top:2px solid var(--line)' : '';
+      return`<tr style="${rowStyle}">
         <td style="white-space:nowrap;font-size:12px">${fmtDT(p.created_at)}</td>
         ${catCell}
         <td class="mono" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.creator_id}">${p.creator_id}</td>
@@ -562,18 +586,23 @@ async function renderAccounts(){
     const rows=d.accounts.map(a=>`<tr>
       <td>
         <div style="font-weight:600;font-size:13px;color:var(--navy)">${a.display_name||a.creator_id}</div>
-        ${(a.category && a.category!==a.display_name)?`<div class="acct-handle">${a.category}</div>`:''} 
+        ${(a.category && a.category!==a.display_name)?`<div class="acct-handle">${a.category}</div>`:''}
       </td>
       <td>
         <div style="display:flex;align-items:center;gap:6px">
           ${connDot(a.ig_connected)}
-          <span style="font-size:13px">${a.ig_username?'@'+a.ig_username:'Not connected'}</span>
+          <div>
+            <span style="font-size:13px">${a.ig_username?'@'+a.ig_username:'Not connected'}</span>
+          </div>
         </div>
       </td>
       <td>
         <div style="display:flex;align-items:center;gap:6px">
           ${connDot(a.yt_connected)}
-          <span style="font-size:13px">${a.yt_channel_name||'Not connected'}</span>
+          <div>
+            <span style="font-size:13px">${a.yt_channel_name||'Not connected'}</span>
+            ${a.yt_handle?`<div class="acct-handle">@${a.yt_handle}</div>`:''}
+          </div>
         </div>
       </td>
       <td class="mono">${nfmt(a.total_posts)}</td>
@@ -624,7 +653,7 @@ function switchTab(tab){
 document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 
 // ── Filter listeners ─────────────────────────────────────────────────────────
-['f-platform','f-format','f-status'].forEach(id=>{
+['f-platform','f-format','f-status','f-category'].forEach(id=>{
   document.getElementById(id).addEventListener('change',()=>{
     if(document.getElementById('tab-posts').classList.contains('active'))renderPosts(1);
   });
@@ -633,6 +662,8 @@ document.getElementById('f-reset').addEventListener('click',()=>{
   document.getElementById('f-platform').value='';
   document.getElementById('f-format').value='';
   document.getElementById('f-status').value='';
+  document.getElementById('f-category').value='';
+  document.getElementById('f-reset').style.display='none';
   renderPosts(1);
 });
 
