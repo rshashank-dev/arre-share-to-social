@@ -29,13 +29,13 @@ module.exports = async (req, res) => {
   // First, get share_jobs in the date range to know which job IDs to filter
   let jobQuery = supabase
     .from('share_jobs')
-    .select('id, platform, format, arre_user_id, post_url, created_at')
+    .select('id, platform, format, creator_id, post_url, created_at')
     .eq('status', 'success');
 
   if (start)   jobQuery = jobQuery.gte('created_at', `${start}T00:00:00.000Z`);
   if (end)     jobQuery = jobQuery.lte('created_at', `${end}T23:59:59.999Z`);
   if (platform) jobQuery = jobQuery.eq('platform', platform);
-  if (user_id) jobQuery = jobQuery.eq('arre_user_id', user_id);
+  if (user_id) jobQuery = jobQuery.eq('creator_id', user_id);
 
   const { data: jobs, error: jobError } = await jobQuery;
   if (jobError) return res.status(500).json({ error: jobError.message });

@@ -60,11 +60,13 @@ async function processJob({ job, post, platform, category }) {
     await updateJob(job.id, { step: 'publishing_to_platform' });
 
     let postResult;
+    const igDesc = `Listen to this pod on Arre Voice — https://app.arrevoice.com/voicepod/${post.pod_id}\nDownload Arre Voice — https://arrevoice.app.link/insta`;
+    const ytDesc = `Listen to this pod on Arre Voice — https://app.arrevoice.com/voicepod/${post.pod_id}\nDownload Arre Voice — https://arrevoice.app.link/youtube`;
     if (platform === 'instagram') {
       postResult = await instagram.publish({
         arreUserId: category,
         videoUrl:   audiogramUrl,
-        caption:    '',
+        caption:    igDesc,
         format:     'reel',
       });
     } else {
@@ -72,7 +74,7 @@ async function processJob({ job, post, platform, category }) {
         arreUserId:  category,
         localPath:   audiogramPath,
         title:       post.title,
-        description: '',
+        description: ytDesc,
       });
     }
 
