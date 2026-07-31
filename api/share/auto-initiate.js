@@ -22,7 +22,6 @@ const VALID_LANGUAGES      = ['Tamil', 'Hinglish', 'English'];
 function validateRequest(body) {
   if (!body?.category)            return 'category is required';
   if (!Array.isArray(body.posts)) return 'posts must be an array';
-  if (body.posts.length !== 3)    return 'posts must be an array of exactly 3';
   for (const [i, post] of body.posts.entries()) {
     const missing = REQUIRED_POST_FIELDS.filter(k => !post[k]);
     if (missing.length) return `posts[${i}] missing: ${missing.join(', ')}`;
