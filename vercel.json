@@ -8,14 +8,38 @@
       "maxDuration": 300,
       "includeFiles": "node_modules/{ffmpeg-static,@ffprobe-installer}/**"
     },
-    "api/share/options.js":                    { "maxDuration": 10 },
-    "api/share/status/[jobId].js":             { "maxDuration": 10 },
-    "api/share/connect/[platform].js":         { "maxDuration": 10 },
-    "api/share/connect/callback/instagram.js": { "maxDuration": 15 },
-    "api/share/connect/callback/youtube.js":   { "maxDuration": 15 },
-    "api/dashboard/stats.js":                  { "maxDuration": 10 },
-    "api/dashboard/posts.js":                  { "maxDuration": 10 },
-    "api/dashboard/engagement.js":             { "maxDuration": 10 },
-    "api/dashboard/accounts.js":               { "maxDuration": 10 }
+    "api/share/options.js": {
+      "maxDuration": 10
+    },
+    "api/share/status/[jobId].js": {
+      "maxDuration": 10
+    },
+    "api/share/connect/[platform].js": {
+      "maxDuration": 10
+    },
+    "api/share/connect/callback/instagram.js": {
+      "maxDuration": 15
+    },
+    "api/share/connect/callback/youtube.js": {
+      "maxDuration": 15
+    },
+    "api/dashboard/stats.js": {
+      "maxDuration": 10
+    },
+    "api/dashboard/posts.js": {
+      "maxDuration": 10
+    },
+    "api/dashboard/engagement.js": {
+      "maxDuration": 10
+    },
+    "api/dashboard/accounts.js": {
+      "maxDuration": 10
+    },
+    "api/share/delete-all.js": {
+      "maxDuration": 60
+    },
+    "api/share/backfill-post-ids.js": {
+      "maxDuration": 60
+    }
   }
 }

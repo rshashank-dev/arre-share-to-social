@@ -202,6 +202,7 @@ section{margin-bottom:34px}
       <div class="s-head">
         <h2>Posting Log</h2>
         <div class="rule"></div>
+        <button id="btn-delete-all" onclick="deleteAll()" style="background:#fde8ea;color:#e25563;border:1px solid #e25563;font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:Inter,sans-serif;transition:.12s" onmouseover="this.style.background='#e25563';this.style.color='#fff'" onmouseout="this.style.background='#fde8ea';this.style.color='#e25563'">🗑 Delete All Posts</button>
       </div>
       <div class="filter-bar">
         <select class="filter-select" id="f-category">
@@ -432,11 +433,26 @@ async function renderPosts(page=1){
       return new Date(a.created_at)-new Date(b.created_at);
     });
 
-    // Populate category dropdown from unique categories in results
-    const cats=[...new Set(sorted.map(p=>p.category).filter(Boolean))].sort();
-    const catSel=document.getElementById('f-category');
-    const curCat=catSel.value;
-    catSel.innerHTML=`<option value="">All categories</option>`+cats.map(c=>`<option value="${c}"${c===curCat?' selected':''}>${c}</option>`).join('');
+    // Populate category dropdown from accounts API (independent of current filter)
+    // Only populate once — don't overwrite if already populated
+    const catSel = document.getElementById('f-category');
+    if(catSel.options.length <= 1) {
+      try {
+        const acctRes = await fetch('/api/dashboard/accounts');
+        if(acctRes.ok) {
+          const acctData = await acctRes.json();
+          const cats = (acctData.accounts||[]).map(a=>a.category||a.creator_id).filter(Boolean).sort();
+          cats.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c; opt.textContent = c;
+            catSel.appendChild(opt);
+          });
+        }
+      } catch(_) {}
+    }
+    // Re-apply current selection
+    const curCat = document.getElementById('f-category').dataset.selected || '';
+    if(curCat) catSel.value = curCat;
 
     let lastCat='';
     const rows=sorted.map(p=>{
@@ -635,7 +651,50 @@ async function renderAccounts(){
   }
 }
 
-// ── Tab switching ────────────────────────────────────────────────────────────
+// ── Delete All ────────────────────────────────────────────────────────────────
+async function deleteAll() {
+  const confirmed = confirm(
+    '⚠️ Delete ALL posts?\n\n' +
+    'This will permanently:\n' +
+    '• Delete every Reel from all Instagram accounts\n' +
+    '• Delete every Short from all YouTube channels\n' +
+    '• Clear all records from this dashboard\n\n' +
+    'This cannot be undone. Are you sure?'
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById('btn-delete-all');
+  btn.textContent = '⏳ Deleting…';
+  btn.disabled = true;
+
+  try {
+    const r = await fetch('/api/share/delete-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': window._apiKey || '' },
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Delete failed');
+    alert(
+      `✅ Done!\n\n` +
+      `Instagram: ${data.instagram_deleted} deleted, ${data.instagram_failed} failed\n` +
+      `YouTube: ${data.youtube_deleted} deleted, ${data.youtube_failed} failed\n` +
+      `Dashboard cleared: ${data.db_cleared ? 'Yes' : 'No'}`
+    );
+    // Refresh all tabs
+    Object.keys(tabLoaded).forEach(k => tabLoaded[k] = false);
+    const active = document.querySelector('.tab-btn.active')?.dataset.tab || 'posts';
+    tabLoaded[active] = true;
+    if (active === 'overview') renderOverview();
+    if (active === 'posts')    renderPosts(1);
+  } catch (e) {
+    alert('Delete failed: ' + e.message);
+  } finally {
+    btn.textContent = '🗑 Delete All Posts';
+    btn.disabled = false;
+  }
+}
+
+
 const tabLoaded={overview:false,posts:false,engagement:false,accounts:false};
 
 function switchTab(tab){
@@ -654,7 +713,8 @@ document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>
 
 // ── Filter listeners ─────────────────────────────────────────────────────────
 ['f-platform','f-format','f-status','f-category'].forEach(id=>{
-  document.getElementById(id).addEventListener('change',()=>{
+  document.getElementById(id).addEventListener('change',function(){
+    if(id==='f-category') this.dataset.selected = this.value;
     if(document.getElementById('tab-posts').classList.contains('active'))renderPosts(1);
   });
 });
@@ -662,7 +722,8 @@ document.getElementById('f-reset').addEventListener('click',()=>{
   document.getElementById('f-platform').value='';
   document.getElementById('f-format').value='';
   document.getElementById('f-status').value='';
-  document.getElementById('f-category').value='';
+  const fc=document.getElementById('f-category');
+  fc.value=''; fc.dataset.selected='';
   document.getElementById('f-reset').style.display='none';
   renderPosts(1);
 });

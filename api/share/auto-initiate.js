@@ -59,8 +59,8 @@ async function processJob({ job, post, platform, category }) {
     await updateJob(job.id, { step: 'publishing_to_platform' });
 
     let postResult;
-    const igDesc = `Listen to this pod on Arre Voice — https://app.arrevoice.com/voicepod/${post.pod_id}\nDownload Arre Voice — https://arrevoice.app.link/insta`;
-    const ytDesc = `Listen to this pod on Arre Voice — https://app.arrevoice.com/voicepod/${post.pod_id}\nDownload Arre Voice — https://arrevoice.app.link/youtube`;
+    const igDesc = `Listen to this pod on Arre Voice — https://app.arrevoice.com/voicepod/${post.pod_id}\n\nDownload Arre Voice — https://arrevoice.app.link/insta`;
+    const ytDesc = `Listen to this pod on Arre Voice — https://app.arrevoice.com/voicepod/${post.pod_id}\n\nDownload Arre Voice — https://arrevoice.app.link/youtube`;
     if (platform === 'instagram') {
       postResult = await instagram.publish({
         arreUserId: category,
@@ -78,7 +78,12 @@ async function processJob({ job, post, platform, category }) {
     }
 
     if (audiogramPath && fs.existsSync(audiogramPath)) fs.unlinkSync(audiogramPath);
-    await updateJob(job.id, { status: 'success', step: null, post_url: postResult.postUrl });
+    await updateJob(job.id, {
+      status:             'success',
+      step:               null,
+      post_url:           postResult.postUrl,
+      platform_post_id:   postResult.postId || null,
+    });
     console.log(`SUCCESS [${category}/${platform}/${post.language}]: ${postResult.postUrl}`);
 
   } catch (err) {
