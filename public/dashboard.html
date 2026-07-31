@@ -670,7 +670,7 @@ async function deleteAll() {
   try {
     const r = await fetch('/api/share/delete-all', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': window._apiKey || '' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': '4a4d4dda6a1454dc8c98dd043c0deaa9854c348faf8ce78fba7cfcb455ac06bf' },
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || 'Delete failed');
