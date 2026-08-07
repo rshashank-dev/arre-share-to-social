@@ -202,7 +202,6 @@ section{margin-bottom:34px}
       <div class="s-head">
         <h2>Posting Log</h2>
         <div class="rule"></div>
-        <button id="btn-delete-all" onclick="deleteAll()" style="background:#fde8ea;color:#e25563;border:1px solid #e25563;font-size:12px;font-weight:600;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:Inter,sans-serif;transition:.12s" onmouseover="this.style.background='#e25563';this.style.color='#fff'" onmouseout="this.style.background='#fde8ea';this.style.color='#e25563'">🗑 Delete All Posts</button>
       </div>
       <div class="filter-bar">
         <select class="filter-select" id="f-category">
@@ -549,8 +548,8 @@ async function renderEngagement(){
     const yt=d.summary.filter(m=>m.platform==='youtube');
 
     const metricLabel={
-      reach:'Reach',impressions:'Impressions',likes:'Likes',comments:'Comments',
-      shares:'Shares',saved:'Saves',profile_visits:'Profile Visits',
+      plays:'Plays',reach:'Reach',likes:'Likes',comments:'Comments',
+      shares:'Shares',saved:'Saves',total_interactions:'Total Interactions',
       views:'Views',watch_time_minutes:'Watch Time (min)',subscribers_gained:'Subscribers Gained',
     };
 
@@ -656,49 +655,6 @@ async function renderAccounts(){
       </section>`;
   }catch(e){
     el.innerHTML=`<div class="state"><span style="color:var(--down);font-weight:600">Failed to load: ${e.message}</span></div>`;
-  }
-}
-
-// ── Delete All ────────────────────────────────────────────────────────────────
-async function deleteAll() {
-  const confirmed = confirm(
-    '⚠️ Delete ALL posts?\n\n' +
-    'This will permanently:\n' +
-    '• Delete every Reel from all Instagram accounts\n' +
-    '• Delete every Short from all YouTube channels\n' +
-    '• Clear all records from this dashboard\n\n' +
-    'This cannot be undone. Are you sure?'
-  );
-  if (!confirmed) return;
-
-  const btn = document.getElementById('btn-delete-all');
-  btn.textContent = '⏳ Deleting…';
-  btn.disabled = true;
-
-  try {
-    const r = await fetch('/api/share/delete-all', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': '4a4d4dda6a1454dc8c98dd043c0deaa9854c348faf8ce78fba7cfcb455ac06bf' },
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error || 'Delete failed');
-    alert(
-      `✅ Done!\n\n` +
-      `Instagram: ${data.instagram_deleted} deleted, ${data.instagram_failed} failed\n` +
-      `YouTube: ${data.youtube_deleted} deleted, ${data.youtube_failed} failed\n` +
-      `Dashboard cleared: ${data.db_cleared ? 'Yes' : 'No'}`
-    );
-    // Refresh all tabs
-    Object.keys(tabLoaded).forEach(k => tabLoaded[k] = false);
-    const active = document.querySelector('.tab-btn.active')?.dataset.tab || 'posts';
-    tabLoaded[active] = true;
-    if (active === 'overview') renderOverview();
-    if (active === 'posts')    renderPosts(1);
-  } catch (e) {
-    alert('Delete failed: ' + e.message);
-  } finally {
-    btn.textContent = '🗑 Delete All Posts';
-    btn.disabled = false;
   }
 }
 

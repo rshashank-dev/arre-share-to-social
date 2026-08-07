@@ -14,7 +14,7 @@ const { google }    = require('googleapis');
 
 const GRAPH = 'https://graph.instagram.com';
 
-const IG_METRICS = ['reach','impressions','likes','comments','shares','saved','profile_visits'];
+const IG_METRICS = ['plays','reach','likes','comments','shares','saved','total_interactions'];
 const YT_METRICS = ['viewCount','likeCount','commentCount'];
 
 function ytVideoId(url) {

@@ -45,7 +45,7 @@ async function processJob({ job, post, platform, category }) {
       audioUrl:      post.audio_url,
       imageUrl:      post.image_url,
       format:        'vertical',
-      durationLimit: 15,
+      durationLimit: 60,
     });
     audiogramPath = result.localPath;
 
