@@ -12,9 +12,9 @@ const { supabase }  = require('../../lib/supabase');
 const { getToken }  = require('../../lib/tokens');
 const { google }    = require('googleapis');
 
-const GRAPH = 'https://graph.instagram.com';
+const GRAPH = 'https://graph.instagram.com/v21.0';
 
-const IG_METRICS = ['plays','reach','likes','comments','shares','saved'];
+const IG_METRICS = ['views','reach','likes','comments','shares','saved','total_interactions','ig_reels_video_view_total_time','ig_reels_avg_watch_time'];
 const YT_METRICS = ['viewCount','likeCount','commentCount'];
 
 function ytVideoId(url) {
