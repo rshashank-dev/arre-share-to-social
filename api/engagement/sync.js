@@ -14,7 +14,7 @@ const { google }    = require('googleapis');
 
 const GRAPH = 'https://graph.instagram.com';
 
-const IG_METRICS = ['plays','reach','likes','comments','shares','saved','total_interactions'];
+const IG_METRICS = ['plays','reach','likes','comments','shares','saved'];
 const YT_METRICS = ['viewCount','likeCount','commentCount'];
 
 function ytVideoId(url) {
@@ -75,13 +75,17 @@ module.exports = async (req, res) => {
 
     try {
       if (job.platform === 'instagram' && job.platform_post_id) {
-        // Fetch Instagram insights
-        const url = `${GRAPH}/${job.platform_post_id}/insights?metric=${IG_METRICS.join(',')}&access_token=${token.access_token}`;
+        const url = `${GRAPH}/${job.platform_post_id}/insights?metric=${IG_METRICS.join(',')}&period=lifetime&access_token=${token.access_token}`;
         const r   = await fetch(url);
         const d   = await r.json();
+        if (d.error) {
+          console.warn(`IG insights error [${job.category}/${job.platform_post_id}]:`, JSON.stringify(d.error));
+          continue;
+        }
         if (d.data) {
           for (const item of d.data) {
-            upserts.push({ job_id: job.id, platform: 'instagram', metric: item.name, value: item.values?.[0]?.value || item.value || 0, pulled_at: new Date().toISOString() });
+            const val = item.values?.[0]?.value ?? item.value ?? 0;
+            upserts.push({ job_id: job.id, platform: 'instagram', metric: item.name, value: val, pulled_at: new Date().toISOString() });
           }
           synced++;
         }
