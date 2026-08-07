@@ -30,6 +30,9 @@
     },
     "api/share/backfill-post-ids.js": {
       "maxDuration": 60
+    },
+    "api/engagement/sync.js": {
+      "maxDuration": 30
     }
   }
 }

@@ -17,7 +17,6 @@ const { getToken }           = require('../../lib/tokens');
 const fs                     = require('fs');
 
 const REQUIRED_POST_FIELDS = ['creator_id', 'language', 'pod_id', 'audio_url', 'image_url', 'title'];
-const VALID_LANGUAGES      = ['Tamil', 'Hinglish', 'English'];
 
 function validateRequest(body) {
   if (!body?.category)            return 'category is required';
@@ -25,8 +24,6 @@ function validateRequest(body) {
   for (const [i, post] of body.posts.entries()) {
     const missing = REQUIRED_POST_FIELDS.filter(k => !post[k]);
     if (missing.length) return `posts[${i}] missing: ${missing.join(', ')}`;
-    if (!VALID_LANGUAGES.includes(post.language))
-      return `posts[${i}].language must be Tamil | Hinglish | English`;
   }
   return null;
 }

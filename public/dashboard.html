@@ -520,8 +520,16 @@ async function renderPosts(page=1){
 // ── Render engagement ────────────────────────────────────────────────────────
 async function renderEngagement(){
   const el=document.getElementById('engagement-content');
-  el.innerHTML='<div class="state"><div class="spinner"></div>Loading…</div>';
+  el.innerHTML='<div class="state"><div class="spinner"></div>Syncing engagement data…</div>';
   try{
+    // Fetch fresh data from platforms first
+    try {
+      await fetch('/api/engagement/sync',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({start:_start,end:_end})
+      });
+    } catch(_) {} // non-fatal — still show cached data
     const d=await fetchEngagement();
 
     if(d.no_data){
