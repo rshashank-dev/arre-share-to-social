@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Arré Voice — Reconnect Instagram Accounts</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--navy:#0F1035;--teal:#2EC4B6;--bg:#f7f8fb;--card:#fff;--line:#e7e8ef;--up:#1a9e6a;--down:#e25563;--muted:#8a8d9f}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:#2b2d42;-webkit-font-smoothing:antialiased}
+  header{background:var(--navy);padding:18px 32px;display:flex;align-items:center;gap:14px}
+  header img{height:40px}
+  header h1{font-family:'Syne',sans-serif;color:#fff;font-size:20px}
+  header span{color:var(--teal);font-size:13px;font-weight:500}
+  .main{max-width:900px;margin:32px auto;padding:0 24px}
+  .info{background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:14px 18px;margin-bottom:24px;font-size:13.5px;line-height:1.6}
+  .info strong{color:#856404}
+  .progress-bar{background:var(--line);border-radius:20px;height:8px;margin-bottom:24px;overflow:hidden}
+  .progress-fill{background:var(--teal);height:100%;border-radius:20px;transition:width .4s ease}
+  .progress-label{font-size:13px;color:var(--muted);margin-bottom:8px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  th{background:var(--navy);color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:12px 16px;text-align:left;font-weight:600}
+  td{padding:12px 16px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:#fafbff}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:6px}
+  .green{background:var(--up)}.red{background:var(--down)}.grey{background:var(--muted)}
+  .status-chip{font-size:12px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-block}
+  .chip-ok{background:#e8f8f0;color:var(--up)}
+  .chip-pending{background:#fff3e0;color:#c98a16}
+  .chip-todo{background:#fde8ea;color:var(--down)}
+  .btn{font-family:'Inter';font-size:13px;font-weight:600;padding:7px 16px;border-radius:8px;cursor:pointer;border:none;transition:.15s}
+  .btn-primary{background:var(--teal);color:#fff}.btn-primary:hover{background:#25a99d}
+  .btn-primary:disabled{background:var(--line);color:var(--muted);cursor:default}
+  .btn-all{background:var(--navy);color:#fff;padding:10px 24px;font-size:14px}.btn-all:hover{background:#1a2068}
+  .actions{display:flex;gap:10px;margin-bottom:20px;align-items:center;flex-wrap:wrap}
+  .summary{font-size:13px;color:var(--muted);margin-left:auto}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="arre-voice-logo.png" onerror="this.style.display='none'"/>
+  <div>
+    <h1>Instagram Reconnect Admin</h1>
+    <span>Add instagram_business_manage_insights scope to all accounts</span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="info">
+    <strong>Why this is needed:</strong> A new permission (<code>instagram_business_manage_insights</code>) was added to get engagement data. Existing tokens don't include it. Click <strong>Reconnect</strong> next to each account — a popup will open. Log in with that account's Instagram credentials and click Allow. Close the popup and click Done. Repeat for all 17 accounts.
+  </div>
+
+  <div class="progress-label" id="progress-label">Loading accounts…</div>
+  <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+
+  <div class="actions">
+    <button class="btn btn-all" onclick="reconnectAll()">▶ Reconnect All (sequential)</button>
+    <span class="summary" id="summary"></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Instagram Account</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">Loading…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+const BASE = '';
+const DONE_KEY = 'ig_reconnect_done';
+let accounts = [];
+let doneSet = new Set(JSON.parse(localStorage.getItem(DONE_KEY) || '[]'));
+
+async function load() {
+  try {
+    const r = await fetch(`${BASE}/api/dashboard/accounts`);
+    const d = await r.json();
+    accounts = (d.accounts || []).filter(a => a.ig_connected || a.yt_connected || a.creator_id);
+    render();
+  } catch(e) {
+    document.getElementById('tbody').innerHTML = `<tr><td colspan="4" style="color:var(--down);padding:20px">Failed to load accounts: ${e.message}</td></tr>`;
+  }
+}
+
+function render() {
+  const done = doneSet.size;
+  const total = accounts.length;
+  document.getElementById('progress-fill').style.width = total ? `${(done/total)*100}%` : '0%';
+  document.getElementById('progress-label').textContent = `${done} of ${total} accounts reconnected`;
+  document.getElementById('summary').textContent = `${total - done} remaining`;
+
+  const rows = accounts.map(a => {
+    const isDone = doneSet.has(a.creator_id);
+    const statusHtml = isDone
+      ? `<span class="status-chip chip-ok">✓ Done</span>`
+      : a.ig_connected
+        ? `<span class="status-chip chip-pending">Needs reconnect</span>`
+        : `<span class="status-chip chip-todo">Not connected</span>`;
+
+    const btnHtml = isDone
+      ? `<button class="btn" style="background:#e8f8f0;color:var(--up)" onclick="markUndone('${a.creator_id}')">Undo</button>`
+      : `<button class="btn btn-primary" onclick="reconnect('${a.creator_id}')">Reconnect IG</button>`;
+
+    const handle = a.ig_username ? `<span style="color:var(--muted);font-size:12px">@${a.ig_username}</span>` : '<span style="color:var(--muted)">—</span>';
+
+    return `<tr id="row-${a.creator_id.replace(/[^a-z0-9]/gi,'_')}">
+      <td><strong>${a.display_name || a.creator_id}</strong></td>
+      <td>${handle}</td>
+      <td>${statusHtml}</td>
+      <td>${btnHtml}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tbody').innerHTML = rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:30px">No accounts found</td></tr>';
+}
+
+async function getConnectUrl(creatorId) {
+  const r = await fetch(`${BASE}/api/share/connect/instagram?user_id=${encodeURIComponent(creatorId)}`);
+  const d = await r.json();
+  return d.auth_url;
+}
+
+function reconnect(creatorId) {
+  getConnectUrl(creatorId).then(url => {
+    if (!url) { alert('Failed to get auth URL'); return; }
+    const popup = window.open(url, 'ig_connect', 'width=600,height=700,left=300,top=100');
+    const checkClosed = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(checkClosed);
+        // Ask user if they completed it
+        if (confirm(`Did you successfully connect ${creatorId}?\n\nClick OK if you saw a blank page (success) or clicked Allow.\nClick Cancel to try again.`)) {
+          markDone(creatorId);
+        }
+      }
+    }, 500);
+  }).catch(e => alert('Error: ' + e.message));
+}
+
+function markDone(creatorId) {
+  doneSet.add(creatorId);
+  localStorage.setItem(DONE_KEY, JSON.stringify([...doneSet]));
+  render();
+}
+
+function markUndone(creatorId) {
+  doneSet.delete(creatorId);
+  localStorage.setItem(DONE_KEY, JSON.stringify([...doneSet]));
+  render();
+}
+
+async function reconnectAll() {
+  const pending = accounts.filter(a => !doneSet.has(a.creator_id) && a.ig_connected);
+  if (!pending.length) { alert('All accounts already reconnected!'); return; }
+  
+  for (const a of pending) {
+    const proceed = confirm(`Ready to reconnect: ${a.display_name || a.creator_id}\n\nMake sure you're logged into the correct Instagram account (@${a.ig_username || a.creator_id}) before clicking OK.`);
+    if (!proceed) continue;
+    
+    const url = await getConnectUrl(a.creator_id);
+    if (!url) { alert('Failed to get URL for ' + a.creator_id); continue; }
+    
+    const popup = window.open(url, 'ig_connect', 'width=600,height=700,left=300,top=100');
+    await new Promise(resolve => {
+      const check = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(check);
+          resolve();
+        }
+      }, 500);
+    });
+    
+    const done = confirm(`Mark ${a.display_name || a.creator_id} as done?\n\nOnly click OK if you saw the blank page (successful connection).`);
+    if (done) markDone(a.creator_id);
+  }
+  
+  alert(`Reconnect session complete!\n${doneSet.size} of ${accounts.length} accounts reconnected.`);
+}
+
+load();
+</script>
+</body>
+</html>
