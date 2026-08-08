@@ -114,7 +114,7 @@ function render() {
 
     const handle = a.ig_username ? `<span style="color:var(--muted);font-size:12px">@${a.ig_username}</span>` : '<span style="color:var(--muted)">—</span>';
 
-    return `<tr id="row-${a.creator_id.replace(/[^a-z0-9]/gi,'_')}">
+    return `<tr id="row-${encodeURIComponent(a.creator_id)}">
       <td><strong>${a.display_name || a.creator_id}</strong></td>
       <td>${handle}</td>
       <td>${statusHtml}</td>
